@@ -109,17 +109,34 @@ func processDoc(doc *yaml.Node) {
 			os.Exit(1)
 		}
 
-		iterateSchema(nil, schema, &props, func(k, n *yaml.Node, schema *apiextensionsv1.JSONSchemaProps, path string) {
-			matches := markerRE.FindStringSubmatch(schema.Description)
-			if matches != nil {
-				gateName := matches[1]
-				text := matches[2]
+		iterateSchema(nil, schema, &props, func(k, n *yaml.Node, in interface{}, path string) {
+			switch v := in.(type) {
+			case *apiextensionsv1.JSONSchemaProps:
+				matches := markerRE.FindStringSubmatch(v.Description)
+				if matches != nil {
+					gateName := matches[1]
+					text := matches[2]
 
-				fmt.Printf("spec.versions[%s].openAPIV3Schema.%s: %s\n", name, path, gateName)
-				_, desc := findNode(n, "description")
-				desc.Value = text
-				k.HeadComment = fmt.Sprintf("{{- if .%s }}", gateName)
-				k.FootComment = "{{- end }}"
+					fmt.Printf("spec.versions[%s].openAPIV3Schema.%s: %s\n", name, path, gateName)
+					_, desc := findNode(n, "description")
+					desc.Value = text
+					k.HeadComment = fmt.Sprintf("{{- if .%s }}", gateName)
+					k.FootComment = "{{- end }}"
+				}
+			case *apiextensionsv1.ValidationRule:
+				matches := markerRE.FindStringSubmatch(v.Message)
+				if matches != nil {
+					gateName := matches[1]
+					text := matches[2]
+
+					fmt.Printf("spec.versions[%s].openAPIV3Schema.%s: %s\n", name, path, gateName)
+					_, msg := findNode(n, "message")
+					msg.Value = text
+					k.HeadComment = fmt.Sprintf("{{- if .%s }}", gateName)
+					k.Content[len(k.Content)-1].FootComment = "{{- end }}"
+				}
+			default:
+				fmt.Printf("Unknown type: %T\n", in)
 			}
 		}, nil)
 	}

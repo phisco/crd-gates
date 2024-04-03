@@ -25,7 +25,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
-type VisitorFunc func(key, n *yaml.Node, schema *apiextensionsv1.JSONSchemaProps, path string)
+type VisitorFunc func(key, n *yaml.Node, in interface{}, path string)
 
 func findNode(yamlNode *yaml.Node, name string) (*yaml.Node, *yaml.Node) {
 	if yamlNode.Kind != yaml.MappingNode {
@@ -64,6 +64,18 @@ func iterateSchema(k, n *yaml.Node, schemaProps *apiextensionsv1.JSONSchemaProps
 				for i, itemNode := range itemsNode.Content {
 					newPath := append(path, fmt.Sprintf("items[%d]", i))
 					iterateSchema(itemNode, itemNode, schemaProps.Items.Schema, visitor, newPath)
+				}
+			}
+		}
+	}
+
+	if len(schemaProps.XValidations) > 0 {
+		_, validationNodes := findNode(n, "x-kubernetes-validations")
+		if validationNodes != nil {
+			if validationNodes.Kind == yaml.SequenceNode {
+				for i, validationNode := range validationNodes.Content {
+					newPath := append(path, fmt.Sprintf("x-kubernetes-validations[%d]", i))
+					visitor(validationNode, validationNode, &schemaProps.XValidations[i], strings.Join(newPath, "."))
 				}
 			}
 		}
